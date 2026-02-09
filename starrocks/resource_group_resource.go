@@ -1,4 +1,4 @@
-package provider
+package starrocks
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"terraform-provider-starrocks/internal/client"
 )
 
 var (
@@ -22,7 +21,7 @@ func NewResourceGroupResource() resource.Resource {
 }
 
 type resourceGroupResource struct {
-	client *client.Client
+	client *Client
 }
 
 type resourceGroupResourceModel struct {
@@ -159,11 +158,11 @@ func (r *resourceGroupResource) Configure(_ context.Context, req resource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.Client)
+	c, ok := req.ProviderData.(*Client)
 	if !ok {
-		resp.Diagnostics.AddError("Unexpected Resource Configure Type", fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
+		resp.Diagnostics.AddError("Unexpected Resource Configure Type", fmt.Sprintf("Expected *Client, got: %T", req.ProviderData))
 		return
 	}
 
-	r.client = client
+	r.client = c
 }

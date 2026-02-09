@@ -1,4 +1,4 @@
-package client
+package starrocks
 
 import (
 	"database/sql"

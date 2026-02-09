@@ -1,4 +1,4 @@
-package provider
+package starrocks
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"terraform-provider-starrocks/internal/client"
 )
 
 var _ provider.Provider = &starrocksProvider{}
@@ -89,14 +88,14 @@ func (p *starrocksProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	client, err := client.NewClient(host, username, password)
+	c, err := NewClient(host, username, password)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to Create StarRocks Client", err.Error())
 		return
 	}
 
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	resp.DataSourceData = c
+	resp.ResourceData = c
 }
 
 func (p *starrocksProvider) DataSources(_ context.Context) []func() datasource.DataSource {
