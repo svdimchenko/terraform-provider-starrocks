@@ -23,7 +23,7 @@ type ResourceGroup struct {
 	MaxCPUCores              types.Int64
 	MemLimit                 types.String
 	ConcurrencyLimit         types.Int64
-	BigQueryMemLimit         types.String
+	BigQueryMemLimit         types.Int64
 	BigQueryScanRowsLimit    types.Int64
 	BigQueryCPUSecondLimit   types.Int64
 	Classifiers              types.List
@@ -46,7 +46,7 @@ type ResourceGroupModel interface {
 	GetMaxCPUCores() types.Int64
 	GetMemLimit() types.String
 	GetConcurrencyLimit() types.Int64
-	GetBigQueryMemLimit() types.String
+	GetBigQueryMemLimit() types.Int64
 	GetBigQueryScanRowsLimit() types.Int64
 	GetBigQueryCPUSecondLimit() types.Int64
 	GetClassifiers() types.List
@@ -127,7 +127,7 @@ func (c *Client) CreateResourceGroup(rg ResourceGroupModel) error {
 		props = append(props, fmt.Sprintf("'concurrency_limit' = '%d'", rg.GetConcurrencyLimit().ValueInt64()))
 	}
 	if !rg.GetBigQueryMemLimit().IsNull() {
-		props = append(props, fmt.Sprintf("'big_query_mem_limit' = '%s'", rg.GetBigQueryMemLimit().ValueString()))
+		props = append(props, fmt.Sprintf("'big_query_mem_limit' = '%d'", rg.GetBigQueryMemLimit().ValueInt64()))
 	}
 	if !rg.GetBigQueryScanRowsLimit().IsNull() {
 		props = append(props, fmt.Sprintf("'big_query_scan_rows_limit' = '%d'", rg.GetBigQueryScanRowsLimit().ValueInt64()))
@@ -170,7 +170,9 @@ func (c *Client) GetResourceGroup(name string) (*ResourceGroup, error) {
 			}
 		}
 		if rg.BigQueryMemLimit.IsNull() {
-			rg.BigQueryMemLimit = types.StringValue(bigQueryMemLimit)
+			if v, err := strconv.ParseInt(bigQueryMemLimit, 10, 64); err == nil {
+				rg.BigQueryMemLimit = types.Int64Value(v)
+			}
 		}
 		if rg.BigQueryScanRowsLimit.IsNull() {
 			if v, err := strconv.ParseInt(bigQueryScanRowsLimit, 10, 64); err == nil {

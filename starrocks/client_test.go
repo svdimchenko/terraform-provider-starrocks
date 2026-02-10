@@ -34,7 +34,7 @@ func TestCreateResourceGroupQuery(t *testing.T) {
 				CPUWeight:              types.Int64Value(5),
 				MemLimit:               types.StringValue("50%"),
 				ConcurrencyLimit:       types.Int64Value(20),
-				BigQueryMemLimit:       types.StringValue("2147483648"),
+				BigQueryMemLimit:       types.Int64Value(2147483648),
 				BigQueryScanRowsLimit:  types.Int64Value(200000),
 				BigQueryCPUSecondLimit: types.Int64Value(200),
 			},
