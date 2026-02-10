@@ -3,13 +3,11 @@ package starrocks
 import (
 	"context"
 	"fmt"
-	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -35,7 +33,7 @@ type resourceGroupResourceModel struct {
 	MaxCPUCores              types.Int64  `tfsdk:"max_cpu_cores"`
 	MemLimit                 types.String `tfsdk:"mem_limit"`
 	ConcurrencyLimit         types.Int64  `tfsdk:"concurrency_limit"`
-	BigQueryMemLimit         types.String `tfsdk:"big_query_mem_limit"`
+	BigQueryMemLimit         types.Int64  `tfsdk:"big_query_mem_limit"`
 	BigQueryScanRowsLimit    types.Int64  `tfsdk:"big_query_scan_rows_limit"`
 	BigQueryCPUSecondLimit   types.Int64  `tfsdk:"big_query_cpu_second_limit"`
 	Classifiers              types.List   `tfsdk:"classifiers"`
@@ -48,7 +46,7 @@ func (m *resourceGroupResourceModel) GetCPUCoreLimit() types.Int64 { return m.CP
 func (m *resourceGroupResourceModel) GetMaxCPUCores() types.Int64 { return m.MaxCPUCores }
 func (m *resourceGroupResourceModel) GetMemLimit() types.String { return m.MemLimit }
 func (m *resourceGroupResourceModel) GetConcurrencyLimit() types.Int64 { return m.ConcurrencyLimit }
-func (m *resourceGroupResourceModel) GetBigQueryMemLimit() types.String { return m.BigQueryMemLimit }
+func (m *resourceGroupResourceModel) GetBigQueryMemLimit() types.Int64 { return m.BigQueryMemLimit }
 func (m *resourceGroupResourceModel) GetBigQueryScanRowsLimit() types.Int64 { return m.BigQueryScanRowsLimit }
 func (m *resourceGroupResourceModel) GetBigQueryCPUSecondLimit() types.Int64 { return m.BigQueryCPUSecondLimit }
 func (m *resourceGroupResourceModel) GetClassifiers() types.List { return m.Classifiers }
@@ -59,33 +57,6 @@ type classifierModel struct {
 	QueryType types.String `tfsdk:"query_type"`
 	SourceIP  types.String `tfsdk:"source_ip"`
 	DB        types.String `tfsdk:"db"`
-}
-
-func formatMemLimit(s string) string {
-	if len(s) > 0 && s[len(s)-1] == '%' {
-		val := s[:len(s)-1]
-		if !strings.Contains(val, ".") {
-			return val + ".0%"
-		}
-	}
-	return s
-}
-
-type memLimitModifier struct{}
-
-func (m memLimitModifier) Description(ctx context.Context) string {
-	return "Formats mem_limit to match StarRocks format"
-}
-
-func (m memLimitModifier) MarkdownDescription(ctx context.Context) string {
-	return "Formats mem_limit to match StarRocks format"
-}
-
-func (m memLimitModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	resp.PlanValue = types.StringValue(formatMemLimit(req.ConfigValue.ValueString()))
 }
 
 func (r *resourceGroupResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -100,9 +71,9 @@ func (r *resourceGroupResource) Schema(_ context.Context, _ resource.SchemaReque
 			"exclusive_cpu_cores":           schema.Int64Attribute{Optional: true},
 			"cpu_core_limit":                schema.Int64Attribute{Optional: true},
 			"max_cpu_cores":                 schema.Int64Attribute{Optional: true},
-			"mem_limit":                     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{memLimitModifier{}, stringplanmodifier.UseStateForUnknown()}},
+			"mem_limit":                     schema.StringAttribute{Optional: true},
 			"concurrency_limit":             schema.Int64Attribute{Optional: true},
-			"big_query_mem_limit":           schema.StringAttribute{Optional: true},
+			"big_query_mem_limit":           schema.Int64Attribute{Optional: true},
 			"big_query_scan_rows_limit":     schema.Int64Attribute{Optional: true},
 			"big_query_cpu_second_limit":    schema.Int64Attribute{Optional: true},
 			"classifiers": schema.ListNestedAttribute{
@@ -214,7 +185,41 @@ func (r *resourceGroupResource) Delete(ctx context.Context, req resource.DeleteR
 }
 
 func (r *resourceGroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resp.State.SetAttribute(ctx, path.Root("name"), req.ID)
+	// Set the name from the import ID
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), req.ID)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read the resource to populate all fields
+	rg, err := r.client.GetResourceGroup(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error importing resource group", err.Error())
+		return
+	}
+
+	// Set all available fields from the database
+	state := resourceGroupResourceModel{
+		Name:                   rg.Name,
+		CPUWeight:              rg.CPUWeight,
+		ExclusiveCPUCores:      rg.ExclusiveCPUCores,
+		CPUCoreLimit:           rg.CPUCoreLimit,
+		MaxCPUCores:            rg.MaxCPUCores,
+		MemLimit:               rg.MemLimit,
+		ConcurrencyLimit:       rg.ConcurrencyLimit,
+		BigQueryMemLimit:       rg.BigQueryMemLimit,
+		BigQueryScanRowsLimit:  rg.BigQueryScanRowsLimit,
+		BigQueryCPUSecondLimit: rg.BigQueryCPUSecondLimit,
+		Classifiers:            types.ListNull(types.ObjectType{AttrTypes: map[string]attr.Type{
+			"user":       types.StringType,
+			"role":       types.StringType,
+			"query_type": types.StringType,
+			"source_ip":  types.StringType,
+			"db":         types.StringType,
+		}}),
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *resourceGroupResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

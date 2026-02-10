@@ -1,0 +1,27 @@
+---
+page_title: "starrocks_resource_group Resource - terraform-provider-starrocks"
+subcategory: ""
+description: |-
+  Manages a StarRocks resource group.
+---
+
+# starrocks_resource_group (Resource)
+
+Manages a StarRocks resource group.
+
+## Important Notes
+
+- `mem_limit`: Must be specified with one decimal place (e.g., `"80.0%"` not `"80%"`) to match StarRocks internal format and avoid drift.
+- Any change to the resource group will trigger a destroy and recreate operation.
+
+## Example Usage
+
+{{ tffile "examples/resources/starrocks_resource_group/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/starrocks_resource_group/import.sh" }}
