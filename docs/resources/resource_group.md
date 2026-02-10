@@ -12,7 +12,7 @@ description: |-
 
 ```terraform
 resource "starrocks_resource_group" "example" {
-  name                        = "example_rg"
+  name                        = "rg_example"
   cpu_core_limit              = 10
   mem_limit                   = "80%"
   concurrency_limit           = 11
@@ -26,11 +26,9 @@ resource "starrocks_resource_group" "example" {
     },
     {
       role = "admin"
-    },
-    {
       query_type = "SELECT"
       db         = "analytics"
-    }
+    },
   ]
 }
 ```
@@ -47,9 +45,12 @@ resource "starrocks_resource_group" "example" {
 - `big_query_cpu_second_limit` (Number)
 - `big_query_mem_limit` (String)
 - `big_query_scan_rows_limit` (Number)
-- `classifiers` (Attributes Set) (see [below for nested schema](#nestedatt--classifiers))
+- `classifiers` (Attributes List) (see [below for nested schema](#nestedatt--classifiers))
 - `concurrency_limit` (Number)
 - `cpu_core_limit` (Number)
+- `cpu_weight` (Number)
+- `exclusive_cpu_cores` (Number)
+- `max_cpu_cores` (Number)
 - `mem_limit` (String)
 
 <a id="nestedatt--classifiers"></a>
