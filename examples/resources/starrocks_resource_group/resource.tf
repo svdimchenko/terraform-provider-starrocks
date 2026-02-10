@@ -1,5 +1,5 @@
 resource "starrocks_resource_group" "example" {
-  name                        = "example_rg"
+  name                        = "rg_example"
   cpu_core_limit              = 10
   mem_limit                   = "80%"
   concurrency_limit           = 11
@@ -13,10 +13,8 @@ resource "starrocks_resource_group" "example" {
     },
     {
       role = "admin"
-    },
-    {
       query_type = "SELECT"
       db         = "analytics"
-    }
+    },
   ]
 }

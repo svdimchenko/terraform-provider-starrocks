@@ -1,13 +1,14 @@
 terraform {
   required_providers {
     starrocks = {
-      source = "hashicorp/starrocks"
+      source = "svdimchenko/starrocks"
     }
   }
 }
 
 provider "starrocks" {
-  host     = "localhost:9030"
+  host     = "localhost"
+  port     = 9030
   username = "root"
   password = "password"
 }

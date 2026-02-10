@@ -10,5 +10,10 @@ install: build
 	mkdir -p ~/.terraform.d/plugins/svdimchenko/starrocks/0.1.0/darwin_arm64
 	cp dist/terraform-provider-starrocks ~/.terraform.d/plugins/svdimchenko/starrocks/0.1.0/darwin_arm64/
 
-docs:
-	go generate ./...
+tfplugindocs:
+	export GOBIN=$PWD/bin
+	export PATH=$GOBIN:$PATH
+	go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+
+docs: tfplugindocs
+	tfplugindocs generate

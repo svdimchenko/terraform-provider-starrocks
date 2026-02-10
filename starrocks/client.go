@@ -17,13 +17,16 @@ type Client struct {
 
 type ResourceGroup struct {
 	Name                     types.String
+	CPUWeight                types.Int64
+	ExclusiveCPUCores        types.Int64
 	CPUCoreLimit             types.Int64
+	MaxCPUCores              types.Int64
 	MemLimit                 types.String
 	ConcurrencyLimit         types.Int64
 	BigQueryMemLimit         types.String
 	BigQueryScanRowsLimit    types.Int64
 	BigQueryCPUSecondLimit   types.Int64
-	Classifiers              types.Set
+	Classifiers              types.List
 }
 
 type Classifier struct {
@@ -37,13 +40,16 @@ type Classifier struct {
 
 type ResourceGroupModel interface {
 	GetName() types.String
+	GetCPUWeight() types.Int64
+	GetExclusiveCPUCores() types.Int64
 	GetCPUCoreLimit() types.Int64
+	GetMaxCPUCores() types.Int64
 	GetMemLimit() types.String
 	GetConcurrencyLimit() types.Int64
 	GetBigQueryMemLimit() types.String
 	GetBigQueryScanRowsLimit() types.Int64
 	GetBigQueryCPUSecondLimit() types.Int64
-	GetClassifiers() types.Set
+	GetClassifiers() types.List
 }
 
 func NewClient(host, username, password string) (*Client, error) {
@@ -56,47 +62,90 @@ func NewClient(host, username, password string) (*Client, error) {
 }
 
 func (c *Client) CreateResourceGroup(rg ResourceGroupModel) error {
-	var parts []string
-	parts = append(parts, fmt.Sprintf("CREATE RESOURCE GROUP '%s'", rg.GetName().ValueString()))
+	query := fmt.Sprintf("CREATE RESOURCE GROUP %s", rg.GetName().ValueString())
 
+	// Add TO clause with classifiers
+	if !rg.GetClassifiers().IsNull() && len(rg.GetClassifiers().Elements()) > 0 {
+		var classifierStrs []string
+		for _, elem := range rg.GetClassifiers().Elements() {
+			var conditions []string
+			if obj, ok := elem.(types.Object); ok {
+				attrs := obj.Attributes()
+				if user, exists := attrs["user"]; exists && !user.IsNull() {
+					if userStr, ok := user.(types.String); ok {
+						conditions = append(conditions, fmt.Sprintf("user='%s'", userStr.ValueString()))
+					}
+				}
+				if role, exists := attrs["role"]; exists && !role.IsNull() {
+					if roleStr, ok := role.(types.String); ok {
+						conditions = append(conditions, fmt.Sprintf("role='%s'", roleStr.ValueString()))
+					}
+				}
+				if queryType, exists := attrs["query_type"]; exists && !queryType.IsNull() {
+					if qtStr, ok := queryType.(types.String); ok {
+						conditions = append(conditions, fmt.Sprintf("query_type='%s'", qtStr.ValueString()))
+					}
+				}
+				if sourceIP, exists := attrs["source_ip"]; exists && !sourceIP.IsNull() {
+					if sipStr, ok := sourceIP.(types.String); ok {
+						conditions = append(conditions, fmt.Sprintf("source_ip='%s'", sipStr.ValueString()))
+					}
+				}
+				if db, exists := attrs["db"]; exists && !db.IsNull() {
+					if dbStr, ok := db.(types.String); ok {
+						conditions = append(conditions, fmt.Sprintf("db='%s'", dbStr.ValueString()))
+					}
+				}
+			}
+			if len(conditions) > 0 {
+				classifierStrs = append(classifierStrs, "("+strings.Join(conditions, ", ")+")")
+			}
+		}
+		if len(classifierStrs) > 0 {
+			query += " TO " + strings.Join(classifierStrs, ", ")
+		}
+	}
+
+	// Add WITH clause with properties
+	var props []string
+	if !rg.GetCPUWeight().IsNull() {
+		props = append(props, fmt.Sprintf("'cpu_weight' = '%d'", rg.GetCPUWeight().ValueInt64()))
+	}
+	if !rg.GetExclusiveCPUCores().IsNull() {
+		props = append(props, fmt.Sprintf("'exclusive_cpu_cores' = '%d'", rg.GetExclusiveCPUCores().ValueInt64()))
+	}
 	if !rg.GetCPUCoreLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'cpu_core_limit' = '%d'", rg.GetCPUCoreLimit().ValueInt64()))
+		props = append(props, fmt.Sprintf("'cpu_core_limit' = '%d'", rg.GetCPUCoreLimit().ValueInt64()))
+	}
+	if !rg.GetMaxCPUCores().IsNull() {
+		props = append(props, fmt.Sprintf("'max_cpu_cores' = '%d'", rg.GetMaxCPUCores().ValueInt64()))
 	}
 	if !rg.GetMemLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'mem_limit' = '%s'", rg.GetMemLimit().ValueString()))
+		props = append(props, fmt.Sprintf("'mem_limit' = '%s'", rg.GetMemLimit().ValueString()))
 	}
 	if !rg.GetConcurrencyLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'concurrency_limit' = '%d'", rg.GetConcurrencyLimit().ValueInt64()))
+		props = append(props, fmt.Sprintf("'concurrency_limit' = '%d'", rg.GetConcurrencyLimit().ValueInt64()))
 	}
 	if !rg.GetBigQueryMemLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'big_query_mem_limit' = '%s'", rg.GetBigQueryMemLimit().ValueString()))
+		props = append(props, fmt.Sprintf("'big_query_mem_limit' = '%s'", rg.GetBigQueryMemLimit().ValueString()))
 	}
 	if !rg.GetBigQueryScanRowsLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'big_query_scan_rows_limit' = '%d'", rg.GetBigQueryScanRowsLimit().ValueInt64()))
+		props = append(props, fmt.Sprintf("'big_query_scan_rows_limit' = '%d'", rg.GetBigQueryScanRowsLimit().ValueInt64()))
 	}
 	if !rg.GetBigQueryCPUSecondLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'big_query_cpu_second_limit' = '%d'", rg.GetBigQueryCPUSecondLimit().ValueInt64()))
+		props = append(props, fmt.Sprintf("'big_query_cpu_second_limit' = '%d'", rg.GetBigQueryCPUSecondLimit().ValueInt64()))
 	}
 
-	query := parts[0]
-	if len(parts) > 1 {
-		query += " WITH (" + strings.Join(parts[1:], ", ") + ")"
+	if len(props) > 0 {
+		query += " WITH (" + strings.Join(props, ", ") + ")"
 	}
 
-	if _, err := c.db.Exec(query); err != nil {
-		return err
-	}
-
-	// Add classifiers if provided
-	if !rg.GetClassifiers().IsNull() && len(rg.GetClassifiers().Elements()) > 0 {
-		// Parse and add classifiers
-	}
-
-	return nil
+	_, err := c.db.Exec(query)
+	return err
 }
 
 func (c *Client) GetResourceGroup(name string) (*ResourceGroup, error) {
-	query := fmt.Sprintf("SHOW RESOURCE GROUP '%s'", name)
+	query := fmt.Sprintf("SHOW RESOURCE GROUP %s", name)
 	rows, err := c.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -168,79 +217,8 @@ func parseClassifier(s string) Classifier {
 	return c
 }
 
-func (c *Client) UpdateResourceGroup(rg ResourceGroupModel, oldRg ResourceGroupModel) error {
-	var oldClassifiers, newClassifiers []Classifier
-
-	// Drop old classifiers
-	if !oldRg.GetClassifiers().IsNull() {
-		// Parse old classifiers to get IDs for dropping
-	}
-
-	for _, classifier := range oldClassifiers {
-		query := fmt.Sprintf("ALTER RESOURCE GROUP '%s' DROP (%d)", rg.GetName().ValueString(), classifier.ID)
-		if _, err := c.db.Exec(query); err != nil {
-			return err
-		}
-	}
-
-	var parts []string
-
-	if !rg.GetCPUCoreLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'cpu_core_limit' = '%d'", rg.GetCPUCoreLimit().ValueInt64()))
-	}
-	if !rg.GetMemLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'mem_limit' = '%s'", rg.GetMemLimit().ValueString()))
-	}
-	if !rg.GetConcurrencyLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'concurrency_limit' = '%d'", rg.GetConcurrencyLimit().ValueInt64()))
-	}
-	if !rg.GetBigQueryMemLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'big_query_mem_limit' = '%s'", rg.GetBigQueryMemLimit().ValueString()))
-	}
-	if !rg.GetBigQueryScanRowsLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'big_query_scan_rows_limit' = '%d'", rg.GetBigQueryScanRowsLimit().ValueInt64()))
-	}
-	if !rg.GetBigQueryCPUSecondLimit().IsNull() {
-		parts = append(parts, fmt.Sprintf("'big_query_cpu_second_limit' = '%d'", rg.GetBigQueryCPUSecondLimit().ValueInt64()))
-	}
-
-	if len(parts) > 0 {
-		query := fmt.Sprintf("ALTER RESOURCE GROUP '%s' WITH (%s)", rg.GetName().ValueString(), strings.Join(parts, ", "))
-		if _, err := c.db.Exec(query); err != nil {
-			return err
-		}
-	}
-
-	// Add new classifiers
-	for _, classifier := range newClassifiers {
-		var conditions []string
-		if !classifier.User.IsNull() {
-			conditions = append(conditions, fmt.Sprintf("user='%s'", classifier.User.ValueString()))
-		}
-		if !classifier.Role.IsNull() {
-			conditions = append(conditions, fmt.Sprintf("role='%s'", classifier.Role.ValueString()))
-		}
-		if !classifier.QueryType.IsNull() {
-			conditions = append(conditions, fmt.Sprintf("query_type='%s'", classifier.QueryType.ValueString()))
-		}
-		if !classifier.SourceIP.IsNull() {
-			conditions = append(conditions, fmt.Sprintf("source_ip='%s'", classifier.SourceIP.ValueString()))
-		}
-		if !classifier.DB.IsNull() {
-			conditions = append(conditions, fmt.Sprintf("db='%s'", classifier.DB.ValueString()))
-		}
-
-		query := fmt.Sprintf("ALTER RESOURCE GROUP '%s' ADD (%s)", rg.GetName().ValueString(), strings.Join(conditions, ", "))
-		if _, err := c.db.Exec(query); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (c *Client) DeleteResourceGroup(name string) error {
-	query := fmt.Sprintf("DROP RESOURCE GROUP '%s'", name)
+	query := fmt.Sprintf("DROP RESOURCE GROUP %s", name)
 	_, err := c.db.Exec(query)
 	return err
 }
