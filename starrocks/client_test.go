@@ -3,6 +3,7 @@ package starrocks
 import (
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -58,6 +59,93 @@ func TestCreateResourceGroupQuery(t *testing.T) {
 				t.Error("Name should not be null")
 			}
 		})
+	}
+}
+
+func TestGetResourceGroup_12Columns(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	client := &Client{db: db}
+
+	// StarRocks 4.1.1 returns 12 columns including "warehouses"
+	cols := []string{"name", "id", "cpu_weight", "exclusive_cpu_cores", "mem_limit",
+		"big_query_cpu_second_limit", "big_query_scan_rows_limit", "big_query_mem_limit",
+		"concurrency_limit", "spill_mem_limit_threshold", "warehouses", "classifiers"}
+
+	mock.ExpectQuery("SHOW RESOURCE GROUP test_rg").WillReturnRows(
+		sqlmock.NewRows(cols).AddRow(
+			"test_rg", "1", "10", "0", "80.0%",
+			"100", "500000", "1073741824",
+			"20", "80%", "", "(id=1, user=test_user)",
+		),
+	)
+
+	rg, err := client.GetResourceGroup("test_rg")
+	if err != nil {
+		t.Fatalf("GetResourceGroup failed: %v", err)
+	}
+
+	if rg.Name.ValueString() != "test_rg" {
+		t.Errorf("Name = %q, want %q", rg.Name.ValueString(), "test_rg")
+	}
+	if rg.MemLimit.ValueString() != "80.0%" {
+		t.Errorf("MemLimit = %q, want %q", rg.MemLimit.ValueString(), "80.0%")
+	}
+	if rg.ConcurrencyLimit.ValueInt64() != 20 {
+		t.Errorf("ConcurrencyLimit = %d, want 20", rg.ConcurrencyLimit.ValueInt64())
+	}
+	if rg.BigQueryMemLimit.ValueInt64() != 1073741824 {
+		t.Errorf("BigQueryMemLimit = %d, want 1073741824", rg.BigQueryMemLimit.ValueInt64())
+	}
+	if rg.BigQueryScanRowsLimit.ValueInt64() != 500000 {
+		t.Errorf("BigQueryScanRowsLimit = %d, want 500000", rg.BigQueryScanRowsLimit.ValueInt64())
+	}
+	if rg.BigQueryCPUSecondLimit.ValueInt64() != 100 {
+		t.Errorf("BigQueryCPUSecondLimit = %d, want 100", rg.BigQueryCPUSecondLimit.ValueInt64())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestGetResourceGroup_11Columns(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	client := &Client{db: db}
+
+	// Older StarRocks without "warehouses" column
+	cols := []string{"name", "id", "cpu_weight", "exclusive_cpu_cores", "mem_limit",
+		"big_query_cpu_second_limit", "big_query_scan_rows_limit", "big_query_mem_limit",
+		"concurrency_limit", "spill_mem_limit_threshold", "classifiers"}
+
+	mock.ExpectQuery("SHOW RESOURCE GROUP test_rg").WillReturnRows(
+		sqlmock.NewRows(cols).AddRow(
+			"test_rg", "1", "10", "0", "80.0%",
+			"100", "500000", "1073741824",
+			"20", "80%", "(id=1, user=test_user)",
+		),
+	)
+
+	rg, err := client.GetResourceGroup("test_rg")
+	if err != nil {
+		t.Fatalf("GetResourceGroup failed: %v", err)
+	}
+
+	if rg.ConcurrencyLimit.ValueInt64() != 20 {
+		t.Errorf("ConcurrencyLimit = %d, want 20", rg.ConcurrencyLimit.ValueInt64())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
