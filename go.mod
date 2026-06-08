@@ -3,6 +3,7 @@ module github.com/svdimchenko/terraform-provider-starrocks
 go 1.25.3
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/hashicorp/terraform-plugin-docs v0.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.18.0

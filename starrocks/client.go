@@ -152,40 +152,64 @@ func (c *Client) GetResourceGroup(name string) (*ResourceGroup, error) {
 	}
 	defer rows.Close()
 
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	colIndex := make(map[string]int, len(cols))
+	for i, col := range cols {
+		colIndex[strings.ToLower(col)] = i
+	}
+
 	rg := &ResourceGroup{Name: types.StringValue(name)}
 	var classifiers []Classifier
 
 	for rows.Next() {
-		var name, id, cpuWeight, exclusiveCPUCores, memLimit, bigQueryCPUSecondLimit, bigQueryScanRowsLimit, bigQueryMemLimit, concurrencyLimit, spillMemLimitThreshold, classifiersStr string
-		if err := rows.Scan(&name, &id, &cpuWeight, &exclusiveCPUCores, &memLimit, &bigQueryCPUSecondLimit, &bigQueryScanRowsLimit, &bigQueryMemLimit, &concurrencyLimit, &spillMemLimitThreshold, &classifiersStr); err != nil {
+		values := make([]string, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range values {
+			ptrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(ptrs...); err != nil {
 			return nil, err
 		}
 
+		getCol := func(name string) string {
+			if idx, ok := colIndex[name]; ok {
+				return values[idx]
+			}
+			return ""
+		}
+
 		if rg.MemLimit.IsNull() {
-			rg.MemLimit = types.StringValue(memLimit)
+			if v := getCol("mem_limit"); v != "" {
+				rg.MemLimit = types.StringValue(v)
+			}
 		}
 		if rg.ConcurrencyLimit.IsNull() {
-			if v, err := strconv.ParseInt(concurrencyLimit, 10, 64); err == nil {
+			if v, err := strconv.ParseInt(getCol("concurrency_limit"), 10, 64); err == nil {
 				rg.ConcurrencyLimit = types.Int64Value(v)
 			}
 		}
 		if rg.BigQueryMemLimit.IsNull() {
-			if v, err := strconv.ParseInt(bigQueryMemLimit, 10, 64); err == nil {
+			if v, err := strconv.ParseInt(getCol("big_query_mem_limit"), 10, 64); err == nil {
 				rg.BigQueryMemLimit = types.Int64Value(v)
 			}
 		}
 		if rg.BigQueryScanRowsLimit.IsNull() {
-			if v, err := strconv.ParseInt(bigQueryScanRowsLimit, 10, 64); err == nil {
+			if v, err := strconv.ParseInt(getCol("big_query_scan_rows_limit"), 10, 64); err == nil {
 				rg.BigQueryScanRowsLimit = types.Int64Value(v)
 			}
 		}
 		if rg.BigQueryCPUSecondLimit.IsNull() {
-			if v, err := strconv.ParseInt(bigQueryCPUSecondLimit, 10, 64); err == nil {
+			if v, err := strconv.ParseInt(getCol("big_query_cpu_second_limit"), 10, 64); err == nil {
 				rg.BigQueryCPUSecondLimit = types.Int64Value(v)
 			}
 		}
 
-		if classifiersStr != "" {
+		if classifiersStr := getCol("classifiers"); classifiersStr != "" {
 			classifier := parseClassifier(classifiersStr)
 			classifiers = append(classifiers, classifier)
 		}
